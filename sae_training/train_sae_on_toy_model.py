@@ -1,9 +1,9 @@
 import einops
 import torch
+import wandb
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-import wandb
 from sae_training.sparse_autoencoder import SparseAutoencoder
 from sae_training.toy_models import Model as ToyModel
 
@@ -37,19 +37,21 @@ def train_toy_sae(
 
     pbar = tqdm(dataloader, desc="Training SAE")
     for _, batch in enumerate(pbar):
-        
         batch = next(dataloader)
         # Make sure the W_dec is still zero-norm
         sparse_autoencoder.set_decoder_norm_to_unit_norm()
 
         # Resample dead neurons
-        if (feature_sampling_method is not None) and ((n_training_steps + 1) % dead_feature_window == 0):
-
+        if (feature_sampling_method is not None) and (
+            (n_training_steps + 1) % dead_feature_window == 0
+        ):
             # Get the fraction of neurons active in the previous window
-            frac_active_in_window = torch.stack(frac_active_list[-dead_feature_window:], dim=0)
+            frac_active_in_window = torch.stack(
+                frac_active_list[-dead_feature_window:], dim=0
+            )
             feature_sparsity = frac_active_in_window.sum(0) / (
-                                dead_feature_window * batch_size
-                            )
+                dead_feature_window * batch_size
+            )
 
             # Compute batch of hidden activations which we'll use in resampling
             resampling_batch = model.generate_batch(batch_size)
@@ -92,7 +94,6 @@ def train_toy_sae(
                     len(frac_active_list) * batch_size
                 )
 
-
             l0 = (feature_acts > 0).float().sum(1).mean()
             l2_norm = torch.norm(feature_acts, dim=1).mean()
 
@@ -121,7 +122,6 @@ def train_toy_sae(
                         "metrics/n_resampled_neurons": n_resampled_neurons,
                     },
                     step=n_training_steps,
-                    
                 )
 
             if (n_training_steps + 1) % (wandb_log_frequency * 100) == 0:
@@ -143,7 +143,7 @@ def train_toy_sae(
         loss.backward()
         sparse_autoencoder.remove_gradient_parallel_to_decoder_directions()
         optimizer.step()
-        
+
         # If we did checkpointing we'd do it here.
 
         n_training_steps += 1

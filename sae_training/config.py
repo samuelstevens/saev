@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 import torch
-
 import wandb
 
 
@@ -22,9 +21,9 @@ class RunnerConfig(ABC):
     is_dataset_tokenized: bool = True
     context_size: int = 128
     use_cached_activations: bool = False
-    cached_activations_path: Optional[
-        str
-    ] = None  # Defaults to "activations/{dataset}/{model}/{full_hook_name}_{hook_point_head_index}"
+    cached_activations_path: Optional[str] = (
+        None  # Defaults to "activations/{dataset}/{model}/{full_hook_name}_{hook_point_head_index}"
+    )
 
     # SAE Parameters
     d_in: int = 512
@@ -32,7 +31,7 @@ class RunnerConfig(ABC):
     # Activation Store Parameters
     n_batches_in_buffer: int = 20
     total_training_tokens: int = 2_000_000
-    store_batch_size: int = 32,
+    store_batch_size: int = (32,)
 
     # Misc
     device: str = "cpu"
@@ -144,21 +143,24 @@ class LanguageModelSAERunnerConfig(RunnerConfig):
         )
         if self.feature_sampling_method != None:
             print(f"We will reset neurons {n_dead_feature_samples} times.")
-        
+
         if self.use_ghost_grads:
             print("Using Ghost Grads.")
-        
+
         print(
             f"We will reset the sparsity calculation {n_feature_window_samples} times."
         )
-        print(f"Number of tokens when resampling: {self.resample_batches * self.store_batch_size}")
+        print(
+            f"Number of tokens when resampling: {self.resample_batches * self.store_batch_size}"
+        )
         # print("Number tokens in dead feature calculation window: ", self.dead_feature_window * self.train_batch_size)
         print(
             f"Number tokens in sparsity calculation window: {self.feature_sampling_window * self.train_batch_size:.2e}"
         )
 
+
 @dataclass
-class ViTSAERunnerConfig():
+class ViTSAERunnerConfig:
     """
     Configuration for training a sparse autoencoder on a vision transformer.
     """
@@ -172,9 +174,9 @@ class ViTSAERunnerConfig():
     block_layer: int = 10
     dataset_path: str = "evanarlian/imagenet_1k_resized_256"
     use_cached_activations: bool = False
-    cached_activations_path: Optional[
-        str
-    ] = None  # Defaults to "activations/{dataset}/{model}/{full_hook_name}_{hook_point_head_index}"
+    cached_activations_path: Optional[str] = (
+        None  # Defaults to "activations/{dataset}/{model}/{full_hook_name}_{hook_point_head_index}"
+    )
 
     # SAE Parameters
     d_in: int = 768
@@ -183,8 +185,8 @@ class ViTSAERunnerConfig():
     total_training_tokens: int = 2_000_000
     n_batches_in_store: int = 32
     store_size: Optional[int] = None
-    max_batch_size_for_vit_forward_pass:int = 1024
-    
+    max_batch_size_for_vit_forward_pass: int = 1024
+
     # Misc
     device: str = "cpu"
     seed: int = 42
@@ -204,7 +206,9 @@ class ViTSAERunnerConfig():
 
     # Resampling protocol args
     use_ghost_grads: bool = True
-    feature_sampling_window: int = 2000   # May need to change this since by default I will use ghost grads
+    feature_sampling_window: int = (
+        2000  # May need to change this since by default I will use ghost grads
+    )
     feature_sampling_method: str = "anthropic"  # None or Anthropic
     resample_batches: int = 32
     feature_reinit_scale: float = 0.2
@@ -224,7 +228,7 @@ class ViTSAERunnerConfig():
 
     def __post_init__(self):
         self.store_size = self.n_batches_in_store * self.batch_size
-        
+
         # Autofill cached_activations_path unless the user overrode it
         if self.cached_activations_path is None:
             self.cached_activations_path = f"activations/{self.dataset_path.replace('/', '_')}/{self.model_name.replace('/', '_')}/{self.block_layer}_{self.module_name}"
@@ -275,14 +279,16 @@ class ViTSAERunnerConfig():
         )
         if self.feature_sampling_method != None:
             print(f"We will reset neurons {n_dead_feature_samples} times.")
-        
+
         if self.use_ghost_grads:
             print("Using Ghost Grads.")
-        
+
         print(
             f"We will reset the sparsity calculation {n_feature_window_samples} times."
         )
-        print(f"Number of tokens when resampling: {self.resample_batches * self.batch_size}")
+        print(
+            f"Number of tokens when resampling: {self.resample_batches * self.batch_size}"
+        )
         # print("Number tokens in dead feature calculation window: ", self.dead_feature_window * self.train_batch_size)
         print(
             f"Number tokens in sparsity calculation window: {self.feature_sampling_window * self.batch_size:.2e}"

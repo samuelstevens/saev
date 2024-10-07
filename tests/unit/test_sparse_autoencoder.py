@@ -12,6 +12,7 @@ from sae_training.sparse_autoencoder import SparseAutoencoder
 TEST_MODEL = "tiny-stories-1M"
 TEST_DATASET = "roneneldan/TinyStories"
 
+
 @pytest.fixture
 def cfg():
     """
@@ -48,10 +49,11 @@ def cfg():
     mock_config.device = "cuda"
     mock_config.seed = 24
     mock_config.checkpoint_path = "test/checkpoints"
-    mock_config.dtype = torch.bfloat16 
-    # mock_config.dtype = torch.float32 
+    mock_config.dtype = torch.bfloat16
+    # mock_config.dtype = torch.float32
 
     return mock_config
+
 
 @pytest.fixture
 def sparse_autoencoder(cfg):
@@ -60,135 +62,141 @@ def sparse_autoencoder(cfg):
     """
     return SparseAutoencoder(cfg)
 
+
 @pytest.fixture
 def model():
     return HookedTransformer.from_pretrained(TEST_MODEL)
+
 
 @pytest.fixture
 def activation_store(cfg, model):
     return ActivationsStore(cfg, model)
 
+
 def test_sparse_autoencoder_init(cfg):
-    
     sparse_autoencoder = SparseAutoencoder(cfg)
-    
+
     assert isinstance(sparse_autoencoder, SparseAutoencoder)
-    
-    assert sparse_autoencoder.W_enc.shape == (cfg.d_in, cfg.d_sae) 
+
+    assert sparse_autoencoder.W_enc.shape == (cfg.d_in, cfg.d_sae)
     assert sparse_autoencoder.W_dec.shape == (cfg.d_sae, cfg.d_in)
     assert sparse_autoencoder.b_enc.shape == (cfg.d_sae,)
     assert sparse_autoencoder.b_dec.shape == (cfg.d_in,)
-    
+
     # assert decoder columns have unit norm
     assert torch.allclose(
-        torch.norm(sparse_autoencoder.W_dec, dim=1), 
-        torch.ones(cfg.d_sae)
+        torch.norm(sparse_autoencoder.W_dec, dim=1), torch.ones(cfg.d_sae)
     )
 
+
 def test_save_model(cfg):
-    
     with tempfile.TemporaryDirectory() as tmpdirname:
-        
         # assert file does not exist
         assert os.path.exists(tmpdirname + "/test.pt") == False
-        
+
         sparse_autoencoder = SparseAutoencoder(cfg)
         sparse_autoencoder.save_model(tmpdirname + "/test.pt")
-        
+
         assert os.path.exists(tmpdirname + "/test.pt")
-        
+
         state_dict_original = sparse_autoencoder.state_dict()
         state_dict_loaded = torch.load(tmpdirname + "/test.pt")
-        
+
         # check for cfg and state_dict keys
         assert "cfg" in state_dict_loaded
         assert "state_dict" in state_dict_loaded
-        
+
         # check cfg matches the original
         assert state_dict_loaded["cfg"] == cfg
-        
+
         # check state_dict matches the original
         for key in sparse_autoencoder.state_dict().keys():
             assert torch.allclose(
                 state_dict_original[key],  # pylint: disable=unsubscriptable-object
-                state_dict_loaded["state_dict"][key]
+                state_dict_loaded["state_dict"][key],
             )
 
+
 def test_load_from_pretrained_pt(cfg):
-    
     with tempfile.TemporaryDirectory() as tmpdirname:
-        
         # assert file does not exist
         assert os.path.exists(tmpdirname + "/test.pt") == False
-        
+
         sparse_autoencoder = SparseAutoencoder(cfg)
         sparse_autoencoder_state_dict = sparse_autoencoder.state_dict()
         sparse_autoencoder.save_model(tmpdirname + "/test.pt")
-        
+
         assert os.path.exists(tmpdirname + "/test.pt")
-        
-        sparse_autoencoder_loaded = SparseAutoencoder.load_from_pretrained(tmpdirname + "/test.pt")
-        sparse_autoencoder_loaded.cfg.device = "cpu" # might autoload onto mps
+
+        sparse_autoencoder_loaded = SparseAutoencoder.load_from_pretrained(
+            tmpdirname + "/test.pt"
+        )
+        sparse_autoencoder_loaded.cfg.device = "cpu"  # might autoload onto mps
         sparse_autoencoder_loaded = sparse_autoencoder_loaded.to("cpu")
         sparse_autoencoder_loaded_state_dict = sparse_autoencoder_loaded.state_dict()
         # check cfg matches the original
         assert sparse_autoencoder_loaded.cfg == cfg
-        
+
         # check state_dict matches the original
         for key in sparse_autoencoder.state_dict().keys():
             assert torch.allclose(
                 sparse_autoencoder_state_dict[key],  # pylint: disable=unsubscriptable-object
-                sparse_autoencoder_loaded_state_dict[key] # pylint: disable=unsubscriptable-object
+                sparse_autoencoder_loaded_state_dict[key],  # pylint: disable=unsubscriptable-object
             )
-            
+
+
 def test_load_from_pretrained_pkl_gz(cfg):
-    
     with tempfile.TemporaryDirectory() as tmpdirname:
-        
         # assert file does not exist
         assert os.path.exists(tmpdirname + "/test.pkl.gz") == False
-        
+
         sparse_autoencoder = SparseAutoencoder(cfg)
         sparse_autoencoder_state_dict = sparse_autoencoder.state_dict()
         sparse_autoencoder.save_model(tmpdirname + "/test.pkl.gz")
-        
+
         assert os.path.exists(tmpdirname + "/test.pkl.gz")
-        
-        sparse_autoencoder_loaded = SparseAutoencoder.load_from_pretrained(tmpdirname + "/test.pkl.gz")
-        sparse_autoencoder_loaded.cfg.device = "cpu" # might autoload onto mps
+
+        sparse_autoencoder_loaded = SparseAutoencoder.load_from_pretrained(
+            tmpdirname + "/test.pkl.gz"
+        )
+        sparse_autoencoder_loaded.cfg.device = "cpu"  # might autoload onto mps
         sparse_autoencoder_loaded = sparse_autoencoder_loaded.to("cpu")
         sparse_autoencoder_loaded_state_dict = sparse_autoencoder_loaded.state_dict()
         # check cfg matches the original
         assert sparse_autoencoder_loaded.cfg == cfg
-        
+
         # check state_dict matches the original
         for key in sparse_autoencoder.state_dict().keys():
             assert torch.allclose(
                 sparse_autoencoder_state_dict[key],  # pylint: disable=unsubscriptable-object
-                sparse_autoencoder_loaded_state_dict[key] # pylint: disable=unsubscriptable-object
+                sparse_autoencoder_loaded_state_dict[key],  # pylint: disable=unsubscriptable-object
             )
-        
+
+
 def test_sparse_autoencoder_forward(sparse_autoencoder):
-    
     batch_size = 32
-    d_in =sparse_autoencoder.d_in
+    d_in = sparse_autoencoder.d_in
     d_sae = sparse_autoencoder.d_sae
-    
+
     x = torch.randn(batch_size, d_in)
     sae_out, feature_acts, loss, mse_loss, l1_loss = sparse_autoencoder.forward(
         x,
     )
-    
+
     assert sae_out.shape == (batch_size, d_in)
     assert feature_acts.shape == (batch_size, d_sae)
     assert loss.shape == ()
     assert mse_loss.shape == ()
     assert l1_loss.shape == ()
     assert torch.allclose(loss, mse_loss + l1_loss)
-    
-    assert torch.allclose(mse_loss, (sae_out.float() - x.float()).pow(2).sum(-1).mean(0))
-    assert torch.allclose(l1_loss, sparse_autoencoder.l1_coefficient * torch.abs(feature_acts).sum())
-    
+
+    assert torch.allclose(
+        mse_loss, (sae_out.float() - x.float()).pow(2).sum(-1).mean(0)
+    )
+    assert torch.allclose(
+        l1_loss, sparse_autoencoder.l1_coefficient * torch.abs(feature_acts).sum()
+    )
+
     # check everything has the right dtype
     assert sae_out.dtype == sparse_autoencoder.dtype
     assert feature_acts.dtype == sparse_autoencoder.dtype
@@ -196,65 +204,69 @@ def test_sparse_autoencoder_forward(sparse_autoencoder):
     assert mse_loss.dtype == sparse_autoencoder.dtype
     assert l1_loss.dtype == sparse_autoencoder.dtype
 
+
 def test_sparse_autoencoder_resample_neurons_l2(sparse_autoencoder):
-    
     batch_size = 32
-    d_in =sparse_autoencoder.d_in
+    d_in = sparse_autoencoder.d_in
     d_sae = sparse_autoencoder.d_sae
 
     x = torch.randn(batch_size, d_in)
     feature_sparsity = torch.exp((torch.randn(d_sae) - 17))
     neuron_resample_scale = 0.2
     optimizer = torch.optim.Adam(sparse_autoencoder.parameters(), lr=1e-4)
-    
+
     # set weight of the sparse autoencoder to be non-zero (and not have unit norm)
-    sparse_autoencoder.W_enc.data = torch.randn(d_in, d_sae)*10
-    sparse_autoencoder.W_dec.data = torch.randn(d_sae, d_in)*10
-    sparse_autoencoder.b_enc.data = torch.randn(d_sae)*10
-    sparse_autoencoder.b_dec.data = torch.randn(d_in)*10
-    
+    sparse_autoencoder.W_enc.data = torch.randn(d_in, d_sae) * 10
+    sparse_autoencoder.W_dec.data = torch.randn(d_sae, d_in) * 10
+    sparse_autoencoder.b_enc.data = torch.randn(d_sae) * 10
+    sparse_autoencoder.b_dec.data = torch.randn(d_in) * 10
+
     # Set optimizer state so we can tell when it is reset:
     dummy_value = 5.0
     for dict_idx, (k, v) in enumerate(optimizer.state.items()):
-            for v_key in ["exp_avg", "exp_avg_sq"]:
-                if dict_idx == 0: # W_enc
-                    assert k.data.shape == (d_in, d_sae)
-                    v[v_key] = dummy_value
-                elif dict_idx == 1: # b_enc
-                    assert k.data.shape == (d_sae,)
-                    v[v_key] = dummy_value
-                elif dict_idx == 2: # W_dec
-                    assert k.data.shape == (d_sae, d_in)
-                    v[v_key]= dummy_value
-                elif dict_idx == 3: # b_dec
-                    assert k.data.shape == (d_in,)
+        for v_key in ["exp_avg", "exp_avg_sq"]:
+            if dict_idx == 0:  # W_enc
+                assert k.data.shape == (d_in, d_sae)
+                v[v_key] = dummy_value
+            elif dict_idx == 1:  # b_enc
+                assert k.data.shape == (d_sae,)
+                v[v_key] = dummy_value
+            elif dict_idx == 2:  # W_dec
+                assert k.data.shape == (d_sae, d_in)
+                v[v_key] = dummy_value
+            elif dict_idx == 3:  # b_dec
+                assert k.data.shape == (d_in,)
     is_dead = feature_sparsity < sparse_autoencoder.cfg.dead_feature_threshold
     alive_neurons = feature_sparsity >= sparse_autoencoder.cfg.dead_feature_threshold
-    
-    
-    n_resampled_neurons = sparse_autoencoder.resample_neurons_l2(x, feature_sparsity, neuron_resample_scale, optimizer)
-    
+
+    n_resampled_neurons = sparse_autoencoder.resample_neurons_l2(
+        x, feature_sparsity, neuron_resample_scale, optimizer
+    )
+
     # want to check the following:
     # 1. that the number of neurons reset is equal to the number of neurons that should be reset
     assert n_resampled_neurons == is_dead.sum().item()
-    
+
     # 2. for each neuron we reset:
     #   a. the bias is zero
     assert torch.allclose(
         sparse_autoencoder.b_enc.data[is_dead],
-        torch.zeros_like(sparse_autoencoder.b_enc.data[is_dead]))
-    #   b. the encoder weights have norm 0.2 * average of other weights. 
-    mean_decoder_norm = sparse_autoencoder.W_enc[:, alive_neurons].norm(dim=0).mean().item()
+        torch.zeros_like(sparse_autoencoder.b_enc.data[is_dead]),
+    )
+    #   b. the encoder weights have norm 0.2 * average of other weights.
+    mean_decoder_norm = (
+        sparse_autoencoder.W_enc[:, alive_neurons].norm(dim=0).mean().item()
+    )
     assert torch.allclose(
         sparse_autoencoder.W_enc[:, is_dead].norm(dim=0),
-        torch.ones(n_resampled_neurons) * 0.2 * mean_decoder_norm
+        torch.ones(n_resampled_neurons) * 0.2 * mean_decoder_norm,
     )
     # c. the decoder weights have unit norm
     assert torch.allclose(
         sparse_autoencoder.W_dec[is_dead, :].norm(dim=1),
-        torch.ones(n_resampled_neurons)
+        torch.ones(n_resampled_neurons),
     )
-    
+
     # d. the Adam parameters are reset
     for dict_idx, (k, v) in enumerate(optimizer.state.items()):
         for v_key in ["exp_avg", "exp_avg_sq"]:
@@ -267,64 +279,72 @@ def test_sparse_autoencoder_resample_neurons_l2(sparse_autoencoder):
                     print(
                         "Warning: it does not seem as if resetting the Adam parameters worked"
                     )
-        
+
     # e. check that the decoder weights for reset neurons match the encoder weights for reset neurons
     # (given both are normalized)
     assert torch.allclose(
-        (sparse_autoencoder.W_enc[:, is_dead] / sparse_autoencoder.W_enc[:, is_dead].norm(dim=0)).T,
-        sparse_autoencoder.W_dec[is_dead, :] / sparse_autoencoder.W_dec[is_dead, :].norm(dim=1).unsqueeze(1)
+        (
+            sparse_autoencoder.W_enc[:, is_dead]
+            / sparse_autoencoder.W_enc[:, is_dead].norm(dim=0)
+        ).T,
+        sparse_autoencoder.W_dec[is_dead, :]
+        / sparse_autoencoder.W_dec[is_dead, :].norm(dim=1).unsqueeze(1),
     )
 
-def test_sparse_autoencoder_resample_neurons_anthropic(sparse_autoencoder, model, activation_store):
-    '''
-    Not sure how to test this properly so for now 
+
+def test_sparse_autoencoder_resample_neurons_anthropic(
+    sparse_autoencoder, model, activation_store
+):
+    """
+    Not sure how to test this properly so for now
     we'll just check that it runs without error.
-    
-    '''
-    
+
+    """
+
     batch_size = sparse_autoencoder.cfg.store_batch_size
-    d_in =sparse_autoencoder.d_in
+    d_in = sparse_autoencoder.d_in
     d_sae = sparse_autoencoder.d_sae
     neuron_resample_scale = sparse_autoencoder.cfg.feature_reinit_scale
     feature_sparsity = torch.exp((torch.randn(d_sae) - 17))
     optimizer = torch.optim.Adam(sparse_autoencoder.parameters(), lr=1e-4)
-    
+
     # Set optimizer state so we can tell when it is reset:
     dummy_value = 5.0
     for dict_idx, (k, v) in enumerate(optimizer.state.items()):
-            for v_key in ["exp_avg", "exp_avg_sq"]:
-                if dict_idx == 0: # W_enc
-                    assert k.data.shape == (d_in, d_sae)
-                    v[v_key] = dummy_value
-                elif dict_idx == 1: # b_enc
-                    assert k.data.shape == (d_sae,)
-                    v[v_key] = dummy_value
-                elif dict_idx == 2: # W_dec
-                    assert k.data.shape == (d_sae, d_in)
-                    v[v_key]= dummy_value
-                elif dict_idx == 3: # b_dec
-                    assert k.data.shape == (d_in,)
-                    
-    dead_neuron_indices = (feature_sparsity < sparse_autoencoder.cfg.dead_feature_threshold).nonzero(as_tuple=False)[:, 0]
-    alive_neurons = (feature_sparsity >= sparse_autoencoder.cfg.dead_feature_threshold).nonzero(as_tuple=False)[:, 0]
+        for v_key in ["exp_avg", "exp_avg_sq"]:
+            if dict_idx == 0:  # W_enc
+                assert k.data.shape == (d_in, d_sae)
+                v[v_key] = dummy_value
+            elif dict_idx == 1:  # b_enc
+                assert k.data.shape == (d_sae,)
+                v[v_key] = dummy_value
+            elif dict_idx == 2:  # W_dec
+                assert k.data.shape == (d_sae, d_in)
+                v[v_key] = dummy_value
+            elif dict_idx == 3:  # b_dec
+                assert k.data.shape == (d_in,)
+
+    dead_neuron_indices = (
+        feature_sparsity < sparse_autoencoder.cfg.dead_feature_threshold
+    ).nonzero(as_tuple=False)[:, 0]
+    alive_neurons = (
+        feature_sparsity >= sparse_autoencoder.cfg.dead_feature_threshold
+    ).nonzero(as_tuple=False)[:, 0]
 
     sparse_autoencoder.resample_neurons_anthropic(
-        dead_neuron_indices, 
-        model,
-        optimizer, 
-        activation_store
+        dead_neuron_indices, model, optimizer, activation_store
     )
-    
+
     # # want to check the following:
     # # 1. that the number of neurons reset is equal to the number of neurons that should be reset
     # assert n_resampled_neurons == is_dead.sum().item()
-    
+
     # # 2. for each neuron we reset:
     # #   a. the bias is zero
     # assert torch.allclose(
     #     sparse_autoencoder.b_enc.data[is_dead],
     #     torch.zeros_like(sparse_autoencoder.b_enc.data[is_dead]))
-    # #   b. the encoder weights have norm 0.2 * average of other weights. 
+    # #   b. the encoder weights have norm 0.2 * average of other weights.
     # mean_decoder_norm = sparse_autoencoder.W_enc[:, alive_neurons].norm(dim=0).mean().item()
     # assert torch.allclose(
     #     sparse_autoencoder.W_enc[:, is_dead].norm(dim=0),
@@ -335,7 +355,7 @@ def test_sparse_autoencoder_resample_neurons_anthropic(sparse_autoencoder, model
     #     sparse_autoencoder.W_dec[is_dead, :].norm(dim=1),
     #     torch.ones(n_resampled_neurons)
     # )
-    
+
     # # d. the Adam parameters are reset
     # for dict_idx, (k, v) in enumerate(optimizer.state.items()):
     #     for v_key in ["exp_avg", "exp_avg_sq"]:
@@ -348,7 +368,7 @@ def test_sparse_autoencoder_resample_neurons_anthropic(sparse_autoencoder, model
     #                 print(
     #                     "Warning: it does not seem as if resetting the Adam parameters worked"
     #                 )
-        
+
     # # e. check that the decoder weights for reset neurons match the encoder weights for reset neurons
     # # (given both are normalized)
     # assert torch.allclose(
@@ -357,10 +377,6 @@ def test_sparse_autoencoder_resample_neurons_anthropic(sparse_autoencoder, model
     # )
 
 
-
 @pytest.mark.skip("TODO")
 def test_sparse_eautoencoder_remove_gradient_parallel_to_decoder_directions(cfg):
-    pass # TODO
-
-
-
+    pass  # TODO
