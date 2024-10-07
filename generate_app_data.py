@@ -10,7 +10,7 @@ from PIL import Image, ImageFilter
 from tqdm import tqdm
 
 from sae_training.sparse_autoencoder import SparseAutoencoder
-from sae_training.utils import ViTSparseAutoencoderSessionloader
+from sae_training.utils import SessionLoader
 
 save_neurons = True
 save_images = True
@@ -30,14 +30,14 @@ max_activating_image_label_indices = (
     .to(torch.int32)
 )  # size [n, num_max_act]
 sae_mean_acts = max_activating_image_values.mean(dim=-1)
-sae_path = f"checkpoints/{expansion_factor}_expansion/final_sparse_autoencoder_openai/clip-vit-large-patch14_-2_resid_{expansion_factor*1024}.pt"
+sae_path = f"checkpoints/{expansion_factor}_expansion/final_sparse_autoencoder_openai/clip-vit-large-patch14_-2_resid_{expansion_factor * 1024}.pt"
 loaded_object = torch.load(sae_path)
 cfg = loaded_object["cfg"]
 state_dict = loaded_object["state_dict"]
 sparse_autoencoder = SparseAutoencoder(cfg)
 sparse_autoencoder.load_state_dict(state_dict)
 sparse_autoencoder.eval()
-loader = ViTSparseAutoencoderSessionloader(cfg)
+loader = SessionLoader(cfg)
 model = loader.get_model(cfg.model_name)
 model.to(cfg.device)
 dataset = load_dataset(cfg.dataset_path, split="train")
@@ -140,12 +140,10 @@ def save_highest_activating_images(neuron_index, neuron_directory):
 
 def save_MLP_cosine_similarity(neuron_index, neuron_directory):
     new_cosine_similarities = cosine_similarities[neuron_index].clone()
-    df = pd.DataFrame(
-        {
-            "X": range(len(new_cosine_similarities)),
-            "Y": new_cosine_similarities.numpy(),  # Convert tensor to numpy array
-        }
-    )
+    df = pd.DataFrame({
+        "X": range(len(new_cosine_similarities)),
+        "Y": new_cosine_similarities.numpy(),  # Convert tensor to numpy array
+    })
     df.to_feather(f"{neuron_directory}/MLP.feather")
 
     # fig = px.line(df, x='X', y='Y', labels={
@@ -175,12 +173,10 @@ def save_activations_and_neurons(image, image_directory):
     _, sae_indices = torch.topk(feature_acts, 5)
     if (torch.log10(sparsity)[sae_indices] > -1.16).sum() > 0:
         raise Exception("Image is invalid!")
-    df = pd.DataFrame(
-        {
-            "X": range(len(feature_acts)),
-            "Y": feature_acts.numpy(),  # Convert tensor to numpy array
-        }
-    )
+    df = pd.DataFrame({
+        "X": range(len(feature_acts)),
+        "Y": feature_acts.numpy(),  # Convert tensor to numpy array
+    })
     df.to_feather(f"{image_directory}/activations.feather")
 
     # fig = px.line(df, x='X', y='Y', labels={
