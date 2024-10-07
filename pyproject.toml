@@ -1,0 +1,9 @@
+[project]
+name = "sae-torch"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+
+[tool.ruff.lint]
+ignore = ["F722"]

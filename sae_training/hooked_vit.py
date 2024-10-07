@@ -67,14 +67,8 @@ class Hook:
 
 class HookedVisionTransformer:
     def __init__(self, model_name: str, device="cuda"):
-        model, processor = self.get_ViT(model_name)
-        self.model = model.to(device)
-        self.processor = processor
-
-    def get_ViT(self, model_name):
-        model = CLIPModel.from_pretrained(model_name)
-        processor = CLIPProcessor.from_pretrained(model_name)
-        return model, processor
+        self.model = CLIPModel.from_pretrained(model_name).to(device)
+        self.processor = CLIPProcessor.from_pretrained(model_name)
 
     def run_with_cache(
         self,
@@ -152,7 +146,7 @@ class HookedVisionTransformer:
     def hooks(self, hooks: List[Hook]):
         """
 
-        This is a context manager for running a model with hooks. The funciton adds
+        This is a context manager for running a model with hooks. The function adds
         forward hooks to the model, and then returns the hooked model to be run with
         a foward pass. The funciton then cleans up by removing any hooks.
 
