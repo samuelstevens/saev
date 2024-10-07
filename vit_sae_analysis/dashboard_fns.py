@@ -1,72 +1,12 @@
 import os
-import shutil
 
 import torch
-import torchvision.transforms as transforms
 from datasets import load_dataset
-from PIL import Image
 from torch import topk
 from tqdm import tqdm, trange
 
 from sae_training.hooked_vit import HookedVisionTransformer
 from sae_training.sparse_autoencoder import SparseAutoencoder
-
-
-def load_images_and_convert_to_tensors(directory_path, device="cuda"):
-    images_tensors = []
-    activations = []
-    supported_formats = ".png"  # Targeting PNG files
-
-    for entry in os.listdir(directory_path):
-        if entry.lower().endswith(supported_formats):
-            img_path = os.path.join(directory_path, entry)
-            img = Image.open(img_path)  # Ensure image is in RGB
-            img_tensor = convert_images_to_tensor([img], device=device)
-            images_tensors.append(img_tensor)
-            activation = float(entry.split("_")[1].replace(".png", ""))
-            activations.append(torch.tensor([activation]))
-    images_tensors = torch.concat(images_tensors, dim=0).to(device)
-    activations = torch.concat(activations, dim=0).to(device)
-    return images_tensors, activations
-
-
-def convert_images_to_tensor(images, device="cuda"):
-    """
-    Convert a list of PIL images to a PyTorch tensor in RGB format with shape [B, C, H, W].
-
-    Parameters:
-    - images: List of PIL.Image objects.
-    - device: The device to store the tensor on ('cpu' or 'cuda').
-
-    Returns:
-    - A PyTorch tensor with shape [B, C, H, W].
-    """
-    # Define a transform to convert PIL images (in RGB) to tensors
-    transform = transforms.Compose(
-        [
-            transforms.Lambda(lambda img: img.convert("RGB")),  # Convert image to RGB
-            transforms.Resize((256, 256)),  # Resize the image to 224x224 pixels
-            transforms.ToTensor(),  # Convert the image to a torch tensor
-        ]
-    )
-
-    # Ensure each image is in RGB format, apply the transform, and move to the specified device
-    tensor_list = [transform(img).to(device) for img in images]
-    tensor_output = torch.stack(tensor_list, dim=0)
-
-    return tensor_output
-
-
-def delete_files_in_directory(directory_path):
-    for filename in os.listdir(directory_path):
-        file_path = os.path.join(directory_path, filename)
-        try:
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                os.unlink(file_path)
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path)
-        except Exception as e:
-            print(f"Failed to delete {file_path}. Reason: {e}")
 
 
 def get_model_activations(model, inputs, cfg):
@@ -251,10 +191,16 @@ def get_feature_data(
         )
     else:
         max_activating_image_indices = torch.zeros(
-            [sparse_autoencoder.cfg.d_sae, number_of_max_activating_images]
+            [
+                sparse_autoencoder.cfg.d_sae,
+                number_of_max_activating_images,
+            ]
         ).to(sparse_autoencoder.cfg.device)
         max_activating_image_values = torch.zeros(
-            [sparse_autoencoder.cfg.d_sae, number_of_max_activating_images]
+            [
+                sparse_autoencoder.cfg.d_sae,
+                number_of_max_activating_images,
+            ]
         ).to(sparse_autoencoder.cfg.device)
         sae_sparsity = torch.zeros([sparse_autoencoder.cfg.d_sae]).to(
             sparse_autoencoder.cfg.device

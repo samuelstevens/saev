@@ -5,15 +5,11 @@ import torchvision.transforms as transforms
 from datasets import load_dataset
 from tqdm import trange
 
-
 sys.path.append("..")
 
 
-
 from sae_training.sparse_autoencoder import SparseAutoencoder
-from sae_training.utils import (
-    ViTSparseAutoencoderSessionloader,
-)
+from sae_training.utils import ViTSparseAutoencoderSessionloader
 from vit_sae_analysis.dashboard_fns import (
     get_all_model_activations,
     get_sae_activations,

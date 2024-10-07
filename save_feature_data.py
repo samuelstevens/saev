@@ -7,9 +7,7 @@ from vit_sae_analysis.dashboard_fns import get_feature_data
 sys.path.append("..")
 
 from sae_training.sparse_autoencoder import SparseAutoencoder
-from sae_training.utils import (
-    ViTSparseAutoencoderSessionloader,
-)
+from sae_training.utils import ViTSparseAutoencoderSessionloader
 
 if torch.backends.mps.is_available():
     device = "mps"
