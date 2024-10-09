@@ -11,10 +11,7 @@ from sae_training.sparse_autoencoder import SparseAutoencoder
 @beartype.beartype
 class SessionLoader:
     """
-    Responsible for loading all required
-    artifacts and files for training
-    a sparse autoencoder on a language model
-    or analysing a pretraining autoencoder
+    Responsible for loading all required artifacts and files for training a sparse autoencoder on a language model or analysing a pretraining autoencoder
     """
 
     def __init__(self, cfg: Config):
