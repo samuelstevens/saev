@@ -1,8 +1,8 @@
 import os
 
 import beartype
+import datasets
 import torch
-from datasets import load_dataset
 from jaxtyping import Float, Int, jaxtyped
 from torch import Tensor, topk
 from tqdm import tqdm, trange
@@ -14,14 +14,14 @@ from sae_training.sparse_autoencoder import SparseAutoencoder
 
 @beartype.beartype
 def get_vit_acts(
-    model: HookedVisionTransformer,
+    vit: HookedVisionTransformer,
     inputs: object,
     cfg: Config,
 ) -> Float[Tensor, "batch d_model"]:
     """
     Args:
-        model: ViT that records activations
-        inputs: a batch of inputs in the format expected by `model`.
+        vit: ViT that records activations
+        inputs: a batch of inputs in the format expected by `vit`.
         cfg: SAE config.
 
     Returns:
@@ -31,7 +31,7 @@ def get_vit_acts(
     block_layer = cfg.block_layer
     list_of_hook_locations = [(block_layer, module_name)]
 
-    activations = model.run_with_cache(
+    activations = vit.run_with_cache(
         list_of_hook_locations,
         **inputs,
     )[1][(block_layer, module_name)]
@@ -42,11 +42,11 @@ def get_vit_acts(
 
 @jaxtyped(typechecker=beartype.beartype)
 def get_all_vit_acts(
-    model: HookedVisionTransformer, images: list, cfg: Config
+    vit: HookedVisionTransformer, images: list, cfg: Config
 ) -> Float[Tensor, "n d_model"]:
     """
     Args:
-        model: ViT that records activations.
+        vit: ViT that records activations.
         images: list of PIL images.
         cfg: SAE config.
 
@@ -56,19 +56,19 @@ def get_all_vit_acts(
     batch_size = cfg.vit_batch_size
     n_batches, remainder = len(images) // batch_size, len(images) % batch_size
     sae_batches = []
-    for batch in trange(n_batches, desc="Getting ViT activations"):
-        image_batch = images[batch * batch_size : (batch + 1) * batch_size]
-        inputs = model.processor(
+    for b in trange(n_batches, desc="Getting ViT activations"):
+        image_batch = images[b * batch_size : (b + 1) * batch_size]
+        inputs = vit.processor(
             images=image_batch, text="", return_tensors="pt", padding=True
-        ).to(model.model.device)
-        sae_batches.append(get_vit_acts(model, inputs, cfg))
+        ).to(vit.model.device)
+        sae_batches.append(get_vit_acts(vit, inputs, cfg))
 
     if remainder > 0:
         image_batch = images[-remainder:]
-        inputs = model.processor(
+        inputs = vit.processor(
             images=image_batch, text="", return_tensors="pt", padding=True
-        ).to(model.model.device)
-        sae_batches.append(get_vit_acts(model, inputs, cfg))
+        ).to(vit.model.device)
+        sae_batches.append(get_vit_acts(vit, inputs, cfg))
 
     sae_batches = torch.cat(sae_batches, dim=0)
     sae_batches = sae_batches.to(cfg.device)
@@ -77,26 +77,24 @@ def get_all_vit_acts(
 
 @jaxtyped(typechecker=beartype.beartype)
 def get_sae_activations(
-    vit_acts: Float[Tensor, "n d_model"], sparse_autoencoder: SparseAutoencoder
+    vit_acts: Float[Tensor, "n d_model"], sae: SparseAutoencoder
 ) -> Float[Tensor, "n d_sae"]:
     hook_name = "hook_hidden_post"
-    batch_size = sparse_autoencoder.cfg.vit_batch_size  # Use this for the SAE too
+    batch_size = sae.cfg.vit_batch_size  # Use this for the SAE too
     n_batches, remainder = len(vit_acts) // batch_size, len(vit_acts) % batch_size
     sae_activations = []
-    for batch in trange(n_batches, desc="Getting SAE activations"):
+    for b in trange(n_batches, desc="Getting SAE activations"):
         sae_activations.append(
-            sparse_autoencoder.run_with_cache(
-                vit_acts[batch * batch_size : (batch + 1) * batch_size]
-            )[1][hook_name]
+            sae.run_with_cache(vit_acts[b * batch_size : (b + 1) * batch_size])[1][
+                hook_name
+            ]
         )
 
     if remainder > 0:
-        sae_activations.append(
-            sparse_autoencoder.run_with_cache(vit_acts[-remainder:])[1][hook_name]
-        )
+        sae_activations.append(sae.run_with_cache(vit_acts[-remainder:])[1][hook_name])
 
     sae_activations = torch.cat(sae_activations, dim=0)
-    sae_activations = sae_activations.to(sparse_autoencoder.cfg.device)
+    sae_activations = sae_activations.to(sae.cfg.device)
     return sae_activations
 
 
@@ -147,57 +145,40 @@ def get_new_top_k(
 @beartype.beartype
 @torch.inference_mode()
 def get_feature_data(
-    sparse_autoencoder: SparseAutoencoder,
-    model: HookedVisionTransformer,
-    number_of_images: int = 32_768,
-    number_of_max_activating_images: int = 10,
-    max_number_of_images_per_iteration: int = 16_384,
+    sae: SparseAutoencoder,
+    vit: HookedVisionTransformer,
+    n_images: int = 32_768,
+    k_top_images: int = 10,
+    images_per_it: int = 16_384,
     seed: int = 1,
     load_pretrained=False,
 ):
     """ """
     torch.cuda.empty_cache()
-    sparse_autoencoder.eval()
+    sae.eval()
 
-    dataset = load_dataset(sparse_autoencoder.cfg.dataset_path, split="train")
-
-    if sparse_autoencoder.cfg.dataset_path == "cifar100":  # Need to put this in the cfg
-        image_key = "img"
-    else:
-        image_key = "image"
+    dataset = datasets.load_dataset(sae.cfg.dataset_path, split="train")
+    key = "image"
 
     dataset = dataset.shuffle(seed=seed)
     directory = "dashboard"
 
-    max_activating_image_indices = torch.zeros([
-        sparse_autoencoder.cfg.d_sae,
-        number_of_max_activating_images,
-    ]).to(sparse_autoencoder.cfg.device)
-    max_activating_image_values = torch.zeros([
-        sparse_autoencoder.cfg.d_sae,
-        number_of_max_activating_images,
-    ]).to(sparse_autoencoder.cfg.device)
-    sae_sparsity = torch.zeros([sparse_autoencoder.cfg.d_sae]).to(
-        sparse_autoencoder.cfg.device
-    )
-    sae_mean_acts = torch.zeros([sparse_autoencoder.cfg.d_sae]).to(
-        sparse_autoencoder.cfg.device
-    )
-    number_of_images_processed = 0
-    while number_of_images_processed < number_of_images:
+    top_image_indices = torch.zeros((sae.cfg.d_sae, k_top_images)).to(sae.cfg.device)
+    top_image_values = torch.zeros((sae.cfg.d_sae, k_top_images)).to(sae.cfg.device)
+    sae_sparsity = torch.zeros((sae.cfg.d_sae,)).to(sae.cfg.device)
+    sae_mean_acts = torch.zeros((sae.cfg.d_sae,)).to(sae.cfg.device)
+    n_images_seen = 0
+    while n_images_seen < n_images:
         torch.cuda.empty_cache()
         try:
-            images = dataset[
-                number_of_images_processed : number_of_images_processed
-                + max_number_of_images_per_iteration
-            ][image_key]
+            images = dataset[n_images_seen : n_images_seen + images_per_it][key]
         except StopIteration:
             print("All of the images in the dataset have been processed!")
             break
 
         # tensor of size [batch, d_resid]
-        vit_acts = get_all_vit_acts(model, images, sparse_autoencoder.cfg)
-        sae_activations = get_sae_activations(vit_acts, sparse_autoencoder).transpose(
+        vit_acts = get_all_vit_acts(vit, images, sae.cfg)
+        sae_activations = get_sae_activations(vit_acts, sae).transpose(
             0, 1
         )  # tensor of size [feature_idx, batch]
         del vit_acts
@@ -206,22 +187,22 @@ def get_feature_data(
 
         # Convert the images list to a torch tensor
         values, indices = topk(
-            sae_activations, k=number_of_max_activating_images, dim=1
+            sae_activations, k=k_top_images, dim=1
         )  # sizes [sae_idx, images] is the size of this matrix correct?
-        indices += number_of_images_processed
+        indices += n_images_seen
 
-        max_activating_image_values, max_activating_image_indices = get_new_top_k(
-            max_activating_image_values,
-            max_activating_image_indices,
+        top_image_values, top_image_indices = get_new_top_k(
+            top_image_values,
+            top_image_indices,
             values,
             indices,
-            number_of_max_activating_images,
+            k_top_images,
         )
 
-        number_of_images_processed += max_number_of_images_per_iteration
+        n_images_seen += images_per_it
 
     sae_mean_acts /= sae_sparsity
-    sae_sparsity /= number_of_images_processed
+    sae_sparsity /= n_images_seen
 
     # Check if the directory exists
     if not os.path.exists(directory):
@@ -229,24 +210,16 @@ def get_feature_data(
         os.makedirs(directory)
 
     # compute the label tensor
-    max_activating_image_label_indices = torch.tensor([
+    top_image_label_indices = torch.tensor([
         dataset[int(index)]["label"]
-        for index in tqdm(
-            max_activating_image_indices.flatten(), desc="getting image labels"
-        )
+        for index in tqdm(top_image_indices.flatten(), desc="getting image labels")
     ])
     # Reshape to original dimensions
-    max_activating_image_label_indices = max_activating_image_label_indices.view(
-        max_activating_image_indices.shape
-    )
+    top_image_label_indices = top_image_label_indices.view(top_image_indices.shape)
+    torch.save(top_image_indices, f"{directory}/max_activating_image_indices.pt")
+    torch.save(top_image_values, f"{directory}/max_activating_image_values.pt")
     torch.save(
-        max_activating_image_indices, f"{directory}/max_activating_image_indices.pt"
-    )
-    torch.save(
-        max_activating_image_values, f"{directory}/max_activating_image_values.pt"
-    )
-    torch.save(
-        max_activating_image_label_indices,
+        top_image_label_indices,
         f"{directory}/max_activating_image_label_indices.pt",
     )
     torch.save(sae_sparsity, f"{directory}/sae_sparsity.pt")
@@ -254,9 +227,9 @@ def get_feature_data(
     # Should also save label information tensor here!!!
 
     save_highest_activating_images(
-        max_activating_image_indices[:1000, :10],
-        max_activating_image_values[:1000, :10],
+        top_image_indices[:1000, :10],
+        top_image_values[:1000, :10],
         directory,
         dataset,
-        image_key,
+        key,
     )

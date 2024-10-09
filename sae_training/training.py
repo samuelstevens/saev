@@ -5,10 +5,10 @@ import re
 import beartype
 import torch
 import torch.optim.lr_scheduler as lr_scheduler
-import wandb
 from torch.optim import Adam
 from tqdm import tqdm
 
+import wandb
 from sae_training.activations_store import ActivationsStore
 from sae_training.config import Config
 from sae_training.hooked_vit import HookedVisionTransformer
@@ -16,7 +16,7 @@ from sae_training.sparse_autoencoder import SparseAutoencoder
 from sae_training.utils import SessionLoader
 
 
-def vision_transformer_sae_runner(
+def train(
     cfg: Config,
 ) -> tuple[SparseAutoencoder, HookedVisionTransformer]:
     loader = SessionLoader(cfg)

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import beartype
 import torch
+
 import wandb
 
 
@@ -18,7 +19,7 @@ class Config:
     model_name: str = "openai/clip-vit-base-patch32"
     module_name: str = "resid"
     block_layer: int = 10
-    dataset_path: str = "evanarlian/imagenet_1k_resized_256"
+    dataset_path: str = "ILSVRC/imagenet-1k"
 
     # SAE Parameters
     d_in: int = 768

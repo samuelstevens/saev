@@ -3,14 +3,14 @@ import os
 import torch
 
 from sae_training.config import Config
-from sae_training.vit_runner import vision_transformer_sae_runner
+from sae_training.training import train
 from vit_sae_analysis.dashboard_fns import get_feature_data
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["WANDB__SERVICE_WAIT"] = "300"
 
 
 def main():
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    os.environ["WANDB__SERVICE_WAIT"] = "300"
-
     cfg = Config(
         # Data Generating Function (Model + Training Distibuion)
         image_width=224,
@@ -18,7 +18,7 @@ def main():
         model_name="openai/clip-vit-large-patch14",
         module_name="resid",
         block_layer=-2,
-        dataset_path="evanarlian/imagenet_1k_resized_256",
+        dataset_path="ILSVRC/imagenet-1k",
         d_in=1024,
         # SAE Parameters
         expansion_factor=64,
@@ -45,12 +45,12 @@ def main():
         dtype=torch.float32,
     )
 
-    sparse_autoencoder, model = vision_transformer_sae_runner(cfg)
+    sparse_autoencoder, vit = train(cfg)
     sparse_autoencoder.eval()
 
     get_feature_data(
         sparse_autoencoder,
-        model,
+        vit,
         number_of_images=524_288,
         number_of_max_activating_images=20,
     )
