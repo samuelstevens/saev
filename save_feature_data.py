@@ -1,17 +1,12 @@
-import tyro
 import torch
+import tyro
 
-from vit_sae_analysis.dashboard_fns import get_feature_data
 from sae_training.sparse_autoencoder import SparseAutoencoder
 from sae_training.utils import SessionLoader
+from vit_sae_analysis.dashboard_fns import get_feature_data
 
 
 def main(ckpt_path: str):
-    if torch.backends.mps.is_available():
-        device = "mps"
-    else:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-
     loaded_object = torch.load(ckpt_path)
     cfg = loaded_object["cfg"]
     state_dict = loaded_object["state_dict"]
