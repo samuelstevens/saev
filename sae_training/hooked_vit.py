@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 from functools import partial
-from typing import Callable, List, Tuple
+from typing import Callable
 
 import torch
 from jaxtyping import Float
@@ -70,30 +70,31 @@ class HookedVisionTransformer:
         self.model = CLIPModel.from_pretrained(model_name).to(device)
         self.processor = CLIPProcessor.from_pretrained(model_name)
 
+    @torch.inference_mode
     def run_with_cache(
         self,
-        list_of_hook_locations: List[Tuple[int, str]],
+        list_of_hook_locations: list[tuple[int, str]],
         *args,
         return_type="output",
         **kwargs,
     ):
         cache_dict, list_of_hooks = self.get_caching_hooks(list_of_hook_locations)
         with self.hooks(list_of_hooks) as hooked_model:
-            with torch.no_grad():
-                output = hooked_model(*args, **kwargs)
+            output = hooked_model(*args, **kwargs)
 
         if return_type == "output":
             return output, cache_dict
+
         if return_type == "loss":
             return self.contrastive_loss(
                 output.logits_per_image, output.logits_per_text
             ), cache_dict
-        else:
-            raise Exception(
-                f"Unrecognised keyword argument return_type='{return_type}'. Must be either 'output' or 'loss'."
-            )
 
-    def get_caching_hooks(self, list_of_hook_locations: List[Tuple[int, str]]):
+        raise Exception(
+            f"Unrecognised keyword argument return_type='{return_type}'. Must be either 'output' or 'loss'."
+        )
+
+    def get_caching_hooks(self, list_of_hook_locations: list[tuple[int, str]]):
         """
         Note that the cache dictionary is index by the tuple (block_layer, module_name).
         """
@@ -111,7 +112,7 @@ class HookedVisionTransformer:
 
     @torch.no_grad
     def run_with_hooks(
-        self, list_of_hooks: List[Hook], *args, return_type="output", **kwargs
+        self, list_of_hooks: list[Hook], *args, return_type="output", **kwargs
     ):
         with self.hooks(list_of_hooks) as hooked_model:
             with torch.no_grad():
@@ -143,7 +144,7 @@ class HookedVisionTransformer:
         return total_loss
 
     @contextmanager
-    def hooks(self, hooks: List[Hook]):
+    def hooks(self, hooks: list[Hook]):
         """
 
         This is a context manager for running a model with hooks. The function adds
@@ -154,7 +155,7 @@ class HookedVisionTransformer:
 
           model VisionTransformer: The ViT that you want to run with the forward hook
 
-          hooks List[Tuple[str, Callable]]: A list of forward hooks to add to the model.
+          hooks list[tuple[str, Callable]]: A list of forward hooks to add to the model.
             Each hook is a tuple of the module name, and the hook funciton.
 
         """

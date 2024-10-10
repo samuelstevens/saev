@@ -1,11 +1,51 @@
 import beartype
 import datasets
 import torch
+import tqdm
 from jaxtyping import Float, jaxtyped
 from torch import Tensor
 
 from sae_training.config import Config
 from sae_training.hooked_vit import HookedVisionTransformer
+
+
+@beartype.beartype
+def make_img_dataloader(
+    cfg: Config, dataset, preprocess
+) -> tuple[object, torch.utils.data.DataLoader]:
+    n_workers = 0
+
+    def batched_transform(example):
+        processed = preprocess(
+            images=example["image"],
+            text=[""] * len(example["image"]),
+            return_tensors="pt",
+            padding=True,
+        )
+        example.update(**processed)
+        return example
+
+    dataset = (
+        dataset.to_iterable_dataset(num_shards=n_workers or 8)
+        .shuffle(seed=cfg.seed)
+        .map(
+            batched_transform,
+            batched=True,
+            batch_size=cfg.batch_size,
+            remove_columns=list(dataset.features.keys()),
+        )
+        .with_format("torch")
+    )
+
+    return dataset, torch.utils.data.DataLoader(
+        dataset=dataset,
+        batch_size=cfg.batch_size,
+        drop_last=False,
+        num_workers=n_workers,
+        persistent_workers=False,
+        shuffle=False,
+        pin_memory=False,
+    )
 
 
 @jaxtyped(typechecker=beartype.beartype)
@@ -19,7 +59,7 @@ class ActivationsStore:
     cfg: Config
     vit: HookedVisionTransformer
     hook_loc: tuple[int, str]
-    batch_size: int
+    _epoch: int = 0
 
     def __init__(
         self,
@@ -28,52 +68,47 @@ class ActivationsStore:
     ):
         self.cfg = cfg
         self.vit = vit
-        self.dataset = datasets.load_dataset(self.cfg.dataset_path, split="train")
-
+        self.dataset = datasets.load_dataset(
+            self.cfg.dataset_path, split="train", trust_remote_code=True
+        )
         self.labels = self.dataset.features["label"].names
-        self.dataset = self.dataset.shuffle(cfg.seed)
+        self.dataset, self.dataloader = make_img_dataloader(
+            cfg, self.dataset, vit.processor
+        )
+        self.dataloader_it = iter(self.dataloader)
 
-        self.dataset_it = iter(self.dataset)
         self.hook_loc = (cfg.block_layer, cfg.module_name)
         assert cfg.vit_batch_size == cfg.batch_size
-        self.batch_size = cfg.batch_size
 
     def get_sae_batches(self) -> Float[Tensor, "store_size d_model"]:
         n_examples = 0
         examples = []
+        pbar = tqdm.tqdm(total=self.cfg.store_size, desc="Getting SAE batches")
         while n_examples < self.cfg.store_size:
-            batch = self.next_batch()
+            batch = self.next_batch().cpu()
             examples.append(batch)
             n_examples += len(batch)
+            pbar.update(len(batch))
 
         examples = torch.cat(examples, dim=0)
         examples = examples[: self.cfg.store_size]
-        examples = examples.to(self.cfg.device)
         return examples
 
     @torch.inference_mode
     def next_batch(self) -> Float[Tensor, "batch d_model"]:
-        # 1. Load images from disk.
-        images = []
-        for _ in range(self.batch_size):
-            try:
-                images.append(next(self.dataset_it)["image"])
-            except StopIteration:
-                self.dataset_it = iter(self.dataset.shuffle())
-                images.append(next(self.dataset_it)["image"])
-
-        # 2. Preprocess images to tensors.
-        inputs = self.vit.processor(
-            images=images, text="", return_tensors="pt", padding=True
-        ).to(self.cfg.device)
+        try:
+            inputs = next(self.dataloader_it)
+        except StopIteration:
+            self._epoch += 1
+            self.dataset.set_epoch(self._epoch)
+            self.dataloader_it = iter(self.dataloader)
+            inputs = next(self.dataloader_it)
 
         # 3. Get ViT activations.
-        activations = self.vit.run_with_cache([self.hook_loc], **inputs)[1][
-            self.hook_loc
-        ]
+        inputs = {key: value.to(self.cfg.device) for key, value in inputs.items()}
+        _, cache = self.vit.run_with_cache([self.hook_loc], **inputs)
+        activations = cache[self.hook_loc]
 
         # Only keep the class token.
         activations = activations[:, 0, :]
-        # Move to device
-        activations = activations.to(self.cfg.device)
         return activations

@@ -59,7 +59,7 @@ class Config:
     # WANDB
     log_to_wandb: bool = True
     wandb_project: str = "mats-hugo"
-    wandb_log_frequency: int = 10
+    wandb_log_freq: int = 10
 
     # Misc
     checkpoint_path: str = "checkpoints"
@@ -84,7 +84,7 @@ class Config:
         total_training_steps = self.total_training_tokens // self.batch_size
         print(f"Total training steps: {total_training_steps}")
 
-        total_wandb_updates = total_training_steps // self.wandb_log_frequency
+        total_wandb_updates = total_training_steps // self.wandb_log_freq
         print(f"Total wandb updates: {total_wandb_updates}")
 
         # how many times will we sample dead neurons?

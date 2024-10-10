@@ -37,7 +37,7 @@ def main():
         # WANDB
         log_to_wandb=True,
         wandb_project="mats-hugo",
-        wandb_log_frequency=20,
+        wandb_log_freq=10,
         # Misc
         device="cuda",
         seed=42,
