@@ -1,3 +1,5 @@
+import gc
+
 import beartype
 import datasets
 import torch
@@ -13,7 +15,7 @@ from sae_training.hooked_vit import HookedVisionTransformer
 def make_img_dataloader(
     cfg: Config, dataset, preprocess
 ) -> tuple[object, torch.utils.data.DataLoader]:
-    n_workers = 0
+    n_workers = 8
 
     def batched_transform(example):
         processed = preprocess(
@@ -42,7 +44,7 @@ def make_img_dataloader(
         batch_size=cfg.batch_size,
         drop_last=False,
         num_workers=n_workers,
-        persistent_workers=False,
+        persistent_workers=True,
         shuffle=False,
         pin_memory=False,
     )
@@ -94,21 +96,26 @@ class ActivationsStore:
         examples = examples[: self.cfg.store_size]
         return examples
 
-    @torch.inference_mode
     def next_batch(self) -> Float[Tensor, "batch d_model"]:
         try:
             inputs = next(self.dataloader_it)
         except StopIteration:
+            print("RELOADING DATALOADER.")
             self._epoch += 1
             self.dataset.set_epoch(self._epoch)
             self.dataloader_it = iter(self.dataloader)
             inputs = next(self.dataloader_it)
 
         # 3. Get ViT activations.
-        inputs = {key: value.to(self.cfg.device) for key, value in inputs.items()}
-        _, cache = self.vit.run_with_cache([self.hook_loc], **inputs)
-        activations = cache[self.hook_loc]
+        with torch.inference_mode():
+            inputs = {key: value.to(self.cfg.device) for key, value in inputs.items()}
+            _, cache = self.vit.run_with_cache([self.hook_loc], **inputs)
+            activations = cache[self.hook_loc]
 
-        # Only keep the class token.
-        activations = activations[:, 0, :]
+            # Only keep the class token.
+            activations = activations[:, 0, :]
+
+        # Need to collect every iteration, otherwise there is a leak and we will run out of VRAM. I know this seems dumb. I know.
+        gc.collect()
+
         return activations
