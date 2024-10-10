@@ -2,9 +2,9 @@ import os
 
 import torch
 
+from analysis import get_feature_data
 from sae_training.config import Config
 from sae_training.training import train
-from vit_sae_analysis.dashboard_fns import get_feature_data
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["WANDB__SERVICE_WAIT"] = "300"
@@ -45,15 +45,9 @@ def main():
         dtype=torch.float32,
     )
 
-    sparse_autoencoder, vit = train(cfg)
-    sparse_autoencoder.eval()
+    sae, vit = train(cfg)
 
-    get_feature_data(
-        sparse_autoencoder,
-        vit,
-        number_of_images=524_288,
-        number_of_max_activating_images=20,
-    )
+    get_feature_data(sae, vit, n_images=524_288, k_top_images=20)
 
 
 if __name__ == "__main__":
