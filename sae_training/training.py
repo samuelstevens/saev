@@ -1,14 +1,13 @@
 import json
 import os
-import re
 
 import beartype
 import torch
 import torch.optim.lr_scheduler as lr_scheduler
+import wandb
 from torch.optim import Adam
 from tqdm import tqdm
 
-import wandb
 from sae_training.activations_store import ActivationsStore
 from sae_training.config import Config
 from sae_training.hooked_vit import HookedVisionTransformer
@@ -28,16 +27,6 @@ def train(cfg: Config) -> tuple[SparseAutoencoder, HookedVisionTransformer]:
     # save sae to checkpoints folder
     path = f"{cfg.checkpoint_path}/final_{sae.get_name()}.pt"
     sae.save_model(path)
-
-    # upload to wandb
-    if cfg.log_to_wandb:
-        model_artifact = wandb.Artifact(
-            f"{re.sub(r'[^a-zA-Z0-9]', '', sae.get_name())}",
-            type="model",
-            metadata=dict(cfg.__dict__),
-        )
-        model_artifact.add_file(path)
-        wandb.log_artifact(model_artifact, aliases=["final_model"])
 
     if cfg.log_to_wandb:
         wandb.finish()

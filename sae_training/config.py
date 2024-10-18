@@ -2,7 +2,6 @@ from dataclasses import dataclass
 
 import beartype
 import torch
-
 import wandb
 
 
@@ -16,45 +15,37 @@ class Config:
     # Data Generating Function (Model + Training Distibuion)
     image_width: int = 224
     image_height: int = 224
-    model_name: str = "openai/clip-vit-base-patch32"
+    model_name: str = "openai/clip-vit-large-patch14"
     module_name: str = "resid"
-    block_layer: int = 10
+    block_layer: int = -2
     dataset_path: str = "ILSVRC/imagenet-1k"
 
     # SAE Parameters
-    d_in: int = 768
+    d_in: int = 1024
 
     # Activation Store Parameters
-    total_training_tokens: int = 2_000_000
-    n_batches_in_store: int = 32
+    total_training_tokens: int = 2_621_440
+    n_batches_in_store: int = 15
     store_size: int | None = None
     vit_batch_size: int = 1024
 
-    # Misc
-    device: str = "cpu"
-    seed: int = 42
-    dtype: torch.dtype = torch.float32
-
     # SAE Parameters
-    expansion_factor: int = 4
-    from_pretrained_path: str | None = None
+    expansion_factor: int = 64
 
     # Training Parameters
-    l1_coefficient: float = 1e-3
-    lr: float = 3e-4
+    l1_coefficient: float = 0.00008
+    lr: float = 0.0004
     lr_warm_up_steps: int = 500
-    batch_size: int = 4096
+    batch_size: int = 1024
 
     # Resampling protocol args
     use_ghost_grads: bool = True
-    feature_sampling_window: int = (
-        2000  # May need to change this since by default I will use ghost grads
-    )
+    feature_sampling_window: int = 64
     resample_batches: int = 32
     feature_reinit_scale: float = 0.2
-    dead_feature_window: int = 1000  # unless this window is larger feature sampling,
+    dead_feature_window: int = 64
     dead_feature_estimation_method: str = "no_fire"
-    dead_feature_threshold: float = 1e-8
+    dead_feature_threshold: float = 1e-6
 
     # WANDB
     log_to_wandb: bool = True
@@ -62,6 +53,9 @@ class Config:
     wandb_log_freq: int = 10
 
     # Misc
+    device: str = "cuda"
+    seed: int = 42
+    dtype: torch.dtype = torch.float32
     checkpoint_path: str = "checkpoints"
 
     def __post_init__(self):
@@ -109,3 +103,15 @@ class Config:
         print(
             f"Number tokens in sparsity calculation window: {self.feature_sampling_window * self.batch_size:.2e}"
         )
+
+
+#################
+# COMPATIBILITY #
+#################
+
+
+# For compatibility with older (pickled) checkpoints.
+# The classes are the same, just named differently.
+
+
+ViTSAERunnerConfig = Config

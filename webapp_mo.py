@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.9.4"
+__generated_with = "0.9.9"
 app = marimo.App(width="full")
 
 
@@ -11,29 +11,32 @@ def __():
     import random
 
     import marimo as mo
-
     return mo, os, pickle, random
 
 
 @app.cell
 def __():
-    webapp_dir = "web_app"
-    s3_dir = "saeexplorer"
-    return s3_dir, webapp_dir
+    # webapp_dir = "webapp/jp7xtqeu"
+    # webapp_dir = "webapp/p9jmneyb"
+    webapp_dir = "/local/scratch/stevens.994/sae-webapp/2dlebd60-original-analysis/updated-generate/webapp"
+    return (webapp_dir,)
 
 
 @app.cell
-def __(os, random, webapp_dir):
+def __(get_metadata, os, webapp_dir):
     neuron_indices = [
         int(name) for name in os.listdir(f"{webapp_dir}/neurons") if name.isdigit()
     ]
-    random.shuffle(neuron_indices)
-    return (neuron_indices,)
+    neuron_indices = sorted(neuron_indices)
+
+    metadatas = [get_metadata(i) for i in neuron_indices]
+    return metadatas, neuron_indices
 
 
 @app.cell
 def __(mo):
     get_neuron_i, set_neuron_i = mo.state(0)
+    get_neuron_i()
     return get_neuron_i, set_neuron_i
 
 
@@ -57,9 +60,9 @@ def __(mo, pickle, webapp_dir):
         with open(f"{webapp_dir}/neurons/{neuron}/meta_data.pkl", "rb") as fd:
             return pickle.load(fd)
 
+
     def format_metadata(metadata: dict[str, float | int]):
         return mo.table([metadata])
-
     return format_metadata, get_metadata
 
 
@@ -76,15 +79,15 @@ def __(get_neuron_i, mo, neuron_indices):
 
 
 @app.cell
-def __(get_metadata, get_neuron_i, mo, neuron_indices):
-    mo.ui.table([get_metadata(neuron_indices[get_neuron_i()])], selection=None)
+def __(get_neuron_i, metadatas, mo):
+    mo.ui.table([metadatas[get_neuron_i()]], selection=None)
     return
 
 
 @app.cell
-def __(get_neuron_i, mo, neuron_indices, s3_dir):
+def __(get_neuron_i, mo, neuron_indices, webapp_dir):
     mo.image(
-        f"{s3_dir}/neurons/{neuron_indices[get_neuron_i()]}/highest_activating_images.png"
+        f"{webapp_dir}/neurons/{neuron_indices[get_neuron_i()]}/highest_activating_images.png"
     )
     return
 

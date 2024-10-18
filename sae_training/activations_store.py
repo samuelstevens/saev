@@ -4,7 +4,7 @@ import beartype
 import datasets
 import torch
 import tqdm
-from jaxtyping import Float, jaxtyped
+from jaxtyping import Float, Int, jaxtyped
 from torch import Tensor
 
 from sae_training.config import Config
@@ -15,9 +15,13 @@ from sae_training.hooked_vit import HookedVisionTransformer
 def make_img_dataloader(
     cfg: Config, dataset, preprocess
 ) -> tuple[object, torch.utils.data.DataLoader]:
-    n_workers = 8
+    @beartype.beartype
+    def add_index(example: dict[str, list], indices: list[int]):
+        example["index"] = indices
+        return example
 
-    def batched_transform(example):
+    @beartype.beartype
+    def map_fn(example: dict[str, list]):
         processed = preprocess(
             images=example["image"],
             text=[""] * len(example["image"]),
@@ -27,15 +31,15 @@ def make_img_dataloader(
         example.update(**processed)
         return example
 
+    n_workers = 0
+
+    default_cols = list(dataset.features.keys())
+
     dataset = (
         dataset.to_iterable_dataset(num_shards=n_workers or 8)
+        .map(add_index, with_indices=True, batched=True)
         .shuffle(seed=cfg.seed)
-        .map(
-            batched_transform,
-            batched=True,
-            batch_size=cfg.batch_size,
-            remove_columns=list(dataset.features.keys()),
-        )
+        .map(map_fn, batched=True, batch_size=32, remove_columns=default_cols)
         .with_format("torch")
     )
 
@@ -44,7 +48,7 @@ def make_img_dataloader(
         batch_size=cfg.batch_size,
         drop_last=False,
         num_workers=n_workers,
-        persistent_workers=True,
+        persistent_workers=n_workers > 0,
         shuffle=False,
         pin_memory=False,
     )
@@ -63,18 +67,15 @@ class ActivationsStore:
     hook_loc: tuple[int, str]
     _epoch: int = 0
 
-    def __init__(
-        self,
-        cfg: Config,
-        vit: HookedVisionTransformer,
-    ):
+    def __init__(self, cfg: Config, vit: HookedVisionTransformer):
         self.cfg = cfg
         self.vit = vit
+
         self.dataset = datasets.load_dataset(
             self.cfg.dataset_path, split="train", trust_remote_code=True
         )
-        self.labels = self.dataset.features["label"].names
-        self.dataset, self.dataloader = make_img_dataloader(
+
+        self.shuffled_dataset, self.dataloader = make_img_dataloader(
             cfg, self.dataset, vit.processor
         )
         self.dataloader_it = iter(self.dataloader)
@@ -96,15 +97,17 @@ class ActivationsStore:
         examples = examples[: self.cfg.store_size]
         return examples
 
-    def next_batch(self) -> Float[Tensor, "batch d_model"]:
+    def next_indexed_batch(
+        self,
+    ) -> tuple[Float[Tensor, "batch d_model"], Int[Tensor, " batch"]]:
         try:
             inputs = next(self.dataloader_it)
         except StopIteration:
-            print("RELOADING DATALOADER.")
             self._epoch += 1
-            self.dataset.set_epoch(self._epoch)
+            self.shuffled_dataset.set_epoch(self._epoch)
             self.dataloader_it = iter(self.dataloader)
             inputs = next(self.dataloader_it)
+        index = inputs.pop("index")
 
         # 3. Get ViT activations.
         with torch.inference_mode():
@@ -118,4 +121,8 @@ class ActivationsStore:
         # Need to collect every iteration, otherwise there is a leak and we will run out of VRAM. I know this seems dumb. I know.
         gc.collect()
 
-        return activations
+        return activations, index
+
+    def next_batch(self) -> Float[Tensor, "batch d_model"]:
+        batch, _ = self.next_indexed_batch()
+        return batch

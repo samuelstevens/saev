@@ -1,141 +1,130 @@
 import os
 import pickle
 
+import beartype
+import datasets
 import torch
+import tqdm
 import tyro
-from datasets import load_dataset
 from PIL import Image
-from tqdm import tqdm
-
-from sae_training.sparse_autoencoder import SparseAutoencoder
 
 
-def main(ckpt_path: str):
-    directory = "dashboard"
-    sparsity = torch.load(f"{directory}/sae_sparsity.pt").to("cpu")  # size [n]
-    max_activating_image_indices = (
-        torch.load(f"{directory}/max_activating_image_indices.pt")
-        .to("cpu")
-        .to(torch.int32)
+@beartype.beartype
+def safe_load(path: str) -> object:
+    return torch.load(path, map_location="cpu", weights_only=True)
+
+
+@beartype.beartype
+def main(ckpt_path: str, in_dir: str = "dashboard", out_dir: str = "web_app"):
+    """
+    Args:
+        in_dir: Where to load the results of analysis.py from.
+        out_dir: Where to write the results.
+        ckpt_path: The specific checkpoint to load to get the original dataset.
+    """
+    # (d_sae,)
+    sparsity = safe_load(f"{in_dir}/sae_sparsity.pt")
+
+    # (d_sae, k)
+    top_indices = safe_load(f"{in_dir}/max_activating_image_indices.pt")
+
+    # (d_sae, k)
+    top_values = safe_load(f"{in_dir}/max_activating_image_values.pt")
+
+    # (d_sae, k)
+    top_label_indices = safe_load(f"{in_dir}/max_activating_image_label_indices.pt")
+
+    sae_mean_acts = top_values.mean(dim=-1)
+    dataset = datasets.load_dataset(
+        torch.load(ckpt_path, weights_only=False)["cfg"].dataset_path, split="train"
     )
-    max_activating_image_values = torch.load(
-        f"{directory}/max_activating_image_values.pt"
-    ).to("cpu")  # size [n, num_max_act]
-    max_activating_image_label_indices = (
-        torch.load(f"{directory}/max_activating_image_label_indices.pt")
-        .to("cpu")
-        .to(torch.int32)
-    )  # size [n, num_max_act]
-    sae_mean_acts = max_activating_image_values.mean(dim=-1)
-    loaded_object = torch.load(ckpt_path)
-    cfg = loaded_object["cfg"]
-    sparse_autoencoder = SparseAutoencoder(cfg)
-    sparse_autoencoder.load_state_dict(loaded_object["state_dict"])
-    sparse_autoencoder.eval()
-    dataset = load_dataset(cfg.dataset_path, split="train")
-    dataset = dataset.shuffle(seed=1)
 
-    number_of_neurons = max_activating_image_values.size()[0]
-    entropy_list = torch.zeros(number_of_neurons)
+    n_neurons, _ = top_values.shape
+    entropies = torch.zeros(n_neurons)
 
-    for i in range(number_of_neurons):
+    for i in range(n_neurons):
         # Get unique labels and their indices for the current sample
-        unique_labels, _ = max_activating_image_label_indices[i].unique(
-            return_inverse=True
-        )
-        unique_labels = unique_labels[
-            unique_labels != 949
-        ]  # ignore label 949 = dataset[0]['label'] - the default label index
-        if len(unique_labels) != 0:
-            counts = 0
-            for label in unique_labels:
-                counts += (max_activating_image_label_indices[i] == label).sum()
-            if counts < 10:
-                entropy_list[i] = -1  # discount as too few datapoints!
-            else:
-                # Sum probabilities based on these labels
-                summed_probs = torch.zeros_like(
-                    unique_labels, dtype=max_activating_image_values.dtype
-                )
-                for j, label in enumerate(unique_labels):
-                    summed_probs[j] = (
-                        max_activating_image_values[i][
-                            max_activating_image_label_indices[i] == label
-                        ]
-                        .sum()
-                        .item()
-                    )
-                # Calculate entropy for the summed probabilities
-                summed_probs = (
-                    summed_probs / summed_probs.sum()
-                )  # Normalize to make it a valid probability distribution
-                entropy = -torch.sum(
-                    summed_probs * torch.log(summed_probs + 1e-9)
-                )  # small epsilon to avoid log(0)
-                entropy_list[i] = entropy
-        else:
-            entropy_list[i] = -1
+        unique_labels, _ = top_label_indices[i].unique(return_inverse=True)
+        # ignore label 949 = dataset[0]['label'] - the default label index
+        unique_labels = unique_labels[unique_labels != 949]
+        if len(unique_labels) == 0:
+            entropies[i] = -1
+            continue
+
+        count = 0
+        for label in unique_labels:
+            count += (top_label_indices[i] == label).sum()
+
+        if count < 10:
+            entropies[i] = -1  # discount as too few datapoints!
+            continue
+
+        # Sum probabilities based on these labels
+        summed_probs = torch.zeros_like(unique_labels, dtype=top_values.dtype)
+        for j, label in enumerate(unique_labels):
+            summed_probs[j] = top_values[i][top_label_indices[i] == label].sum().item()
+        # Calculate entropy for the summed probabilities
+        # Normalize to make it a valid probability distribution
+        summed_probs = summed_probs / summed_probs.sum()
+        # small epsilon to avoid log(0)
+        entropy = -torch.sum(summed_probs * torch.log(summed_probs + 1e-9))
+        entropies[i] = entropy
 
     # Mask all neurons in the dense cluster
     mask = (
         (torch.log10(sparsity) > -4)
         & (torch.log10(sae_mean_acts) > -0.7)
-        & (entropy_list > -1)
+        & (entropies > -1)
     )
-    indices = torch.tensor([i for i in range(number_of_neurons)])
+    indices = torch.tensor([i for i in range(n_neurons)])
     indices = list(indices[mask])
 
-    def save_highest_activating_images(neuron_index, neuron_directory):
-        image_indices = max_activating_image_indices[neuron_index][:16]
-        images = []
-        for image_index in image_indices:
-            images.append(dataset[int(image_index)]["image"])
-        # Resize images and ensure they are in RGB
-        resized_images = [img.resize((224, 224)).convert("RGB") for img in images]
+    @beartype.beartype
+    def make_img_grid(imgs: list):
+        # Resize to 224x224
+        img_width, img_height = 224, 224
+        imgs = [img.resize((img_width, img_height)).convert("RGB") for img in imgs]
 
         # Create an image grid
         grid_size = 4
-        image_width, image_height = 224, 224
         border_size = 2  # White border thickness
 
         # Create a new image with white background
-        total_width = grid_size * image_width + (grid_size - 1) * border_size
-        total_height = grid_size * image_height + (grid_size - 1) * border_size
-        new_im = Image.new("RGB", (total_width, total_height), "white")
+        grid_width = grid_size * img_width + (grid_size - 1) * border_size
+        grid_height = grid_size * img_height + (grid_size - 1) * border_size
+        img_grid = Image.new("RGB", (grid_width, grid_height), "white")
 
         # Paste images in the grid
         x_offset, y_offset = 0, 0
-        for i, img in enumerate(resized_images):
-            new_im.paste(img, (x_offset, y_offset))
-            x_offset += image_width + border_size
+        for i, img in enumerate(imgs):
+            img_grid.paste(img, (x_offset, y_offset))
+            x_offset += img_width + border_size
             if (i + 1) % grid_size == 0:
                 x_offset = 0
-                y_offset += image_height + border_size
+                y_offset += img_height + border_size
+        return img_grid
 
-        # Save the new image
-        new_im.save(f"{neuron_directory}/highest_activating_images.png")
+    os.makedirs(f"{out_dir}/neurons", exist_ok=True)
+    torch.save(entropies, f"{out_dir}/neurons/entropy.pt")
+    for i in tqdm.tqdm(indices, desc="saving highest activating grids"):
+        i = int(i.item())
+        neuron_dir = f"{out_dir}/neurons/{i}"
+        os.makedirs(neuron_dir, exist_ok=True)
 
-    new_directory = "web_app/neurons"
-    if not os.path.exists(new_directory):
-        os.makedirs(new_directory)
-    torch.save(entropy_list, "web_app/neurons/entropy.pt")
-    for index in tqdm(indices, desc="saving highest activating grids"):
-        index = int(index.item())
-        new_directory = f"web_app/neurons/{index}"
-        external_directory = f"saeexplorer/neurons/{index}"
-        if not os.path.exists(new_directory):
-            os.makedirs(new_directory)
-        if not os.path.exists(external_directory):
-            os.makedirs(external_directory)
-        save_highest_activating_images(index, external_directory)
-        meta_data = {
-            "neuron index": index,
-            "log 10 sparsity": torch.log10(sparsity)[index].item(),
-            "mean activation": sae_mean_acts[index].item(),
-            "label entropy": entropy_list[index].item(),
+        # Image grid
+        imgs = [dataset[int(img_i)]["image"] for img_i in top_indices[i][:16]]
+        img_grid = make_img_grid(imgs)
+        img_grid.save(f"{neuron_dir}/highest_activating_images.png")
+
+        # Metadata
+        metadata = {
+            "neuron index": i,
+            "log 10 sparsity": torch.log10(sparsity)[i].item(),
+            "mean activation": sae_mean_acts[i].item(),
+            "label entropy": entropies[i].item(),
         }
-        with open(f"{new_directory}/meta_data.pkl", "wb") as pickle_file:
-            pickle.dump(meta_data, pickle_file)
+        with open(f"{neuron_dir}/meta_data.pkl", "wb") as pickle_file:
+            pickle.dump(metadata, pickle_file)
 
 
 if __name__ == "__main__":
