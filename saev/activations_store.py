@@ -7,8 +7,8 @@ import tqdm
 from jaxtyping import Float, Int, jaxtyped
 from torch import Tensor
 
-from sae_training.config import Config
-from sae_training.hooked_vit import HookedVisionTransformer
+from .config import Config
+from .hooked_vit import HookedVisionTransformer
 
 
 @beartype.beartype

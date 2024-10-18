@@ -6,8 +6,8 @@ import einops
 import torch
 from transformer_lens.hook_points import HookedRootModule, HookPoint
 
-from sae_training.activations_store import ActivationsStore
-from sae_training.config import Config
+from .activations_store import ActivationsStore
+from .config import Config
 
 
 class SparseAutoencoder(HookedRootModule):

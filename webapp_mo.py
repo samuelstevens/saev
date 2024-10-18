@@ -11,6 +11,7 @@ def __():
     import random
 
     import marimo as mo
+
     return mo, os, pickle, random
 
 
@@ -60,9 +61,9 @@ def __(mo, pickle, webapp_dir):
         with open(f"{webapp_dir}/neurons/{neuron}/meta_data.pkl", "rb") as fd:
             return pickle.load(fd)
 
-
     def format_metadata(metadata: dict[str, float | int]):
         return mo.table([metadata])
+
     return format_metadata, get_metadata
 
 

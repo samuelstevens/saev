@@ -1,20 +1,12 @@
 import os
-import tyro
 
 import torch
+import tyro
 
-from analysis import get_feature_data
-from sae_training.config import Config
-from sae_training.training import train
+import saev
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["WANDB__SERVICE_WAIT"] = "300"
-
-
-def main(cfg: Config):
-    sae, vit = train(cfg)
-
-    get_feature_data(sae, vit, n_images=524_288, k_top_images=20)
 
 
 if __name__ == "__main__":
@@ -26,4 +18,4 @@ if __name__ == "__main__":
         torch.backends.cudnn.benchmark = True
         torch.backends.cudnn.deterministic = False
 
-    main(tyro.cli(Config))
+    saev.training.train(tyro.cli(saev.Config))

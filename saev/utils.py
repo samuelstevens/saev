@@ -1,10 +1,10 @@
 import beartype
 import torch
 
-from sae_training.activations_store import ActivationsStore
-from sae_training.config import Config
-from sae_training.hooked_vit import HookedVisionTransformer
-from sae_training.sparse_autoencoder import SparseAutoencoder
+from .activations_store import ActivationsStore
+from .config import Config
+from .hooked_vit import HookedVisionTransformer
+from .sparse_autoencoder import SparseAutoencoder
 
 
 @beartype.beartype

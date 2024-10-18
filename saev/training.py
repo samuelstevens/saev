@@ -4,15 +4,16 @@ import os
 import beartype
 import torch
 import torch.optim.lr_scheduler as lr_scheduler
-import wandb
 from torch.optim import Adam
 from tqdm import tqdm
 
-from sae_training.activations_store import ActivationsStore
-from sae_training.config import Config
-from sae_training.hooked_vit import HookedVisionTransformer
-from sae_training.sparse_autoencoder import SparseAutoencoder
-from sae_training.utils import new_session
+import wandb
+
+from .activations_store import ActivationsStore
+from .config import Config
+from .hooked_vit import HookedVisionTransformer
+from .sparse_autoencoder import SparseAutoencoder
+from .utils import new_session
 
 
 def train(cfg: Config) -> tuple[SparseAutoencoder, HookedVisionTransformer]:

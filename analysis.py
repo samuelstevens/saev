@@ -4,15 +4,12 @@ import os
 
 import beartype
 import torch
+import tqdm
 import tyro
 from jaxtyping import Float, Int, jaxtyped
 from torch import Tensor
-from tqdm import tqdm, trange
 
-from sae_training.activations_store import ActivationsStore
-from sae_training.hooked_vit import HookedVisionTransformer
-from sae_training.sparse_autoencoder import SparseAutoencoder
-from sae_training.utils import load_session
+import saev
 
 logger = logging.getLogger("analysis")
 
@@ -38,7 +35,7 @@ def batched_idx(
 
 @jaxtyped(typechecker=beartype.beartype)
 def get_vit_acts(
-    acts_store: ActivationsStore, n: int
+    acts_store: saev.ActivationsStore, n: int
 ) -> tuple[Float[Tensor, "n d_model"], Int[Tensor, " n"]]:
     """
     Args:
@@ -62,7 +59,7 @@ def get_vit_acts(
 
 @jaxtyped(typechecker=beartype.beartype)
 def get_sae_acts(
-    vit_acts: Float[Tensor, "n d_model"], sae: SparseAutoencoder
+    vit_acts: Float[Tensor, "n d_model"], sae: saev.SparseAutoencoder
 ) -> Float[Tensor, "n d_sae"]:
     sae_acts = []
     for start, end in batched_idx(len(vit_acts), sae.cfg.vit_batch_size):
@@ -92,8 +89,8 @@ def get_new_topk(
 @beartype.beartype
 @torch.inference_mode()
 def get_feature_data(
-    sae: SparseAutoencoder,
-    vit: HookedVisionTransformer,
+    sae: saev.SparseAutoencoder,
+    vit: saev.HookedVisionTransformer,
     *,
     n_images: int = 32_768,
     k_top_images: int = 10,
@@ -115,7 +112,7 @@ def get_feature_data(
 
     breakpoint()
 
-    acts_store = ActivationsStore(sae.cfg, vit)
+    acts_store = saev.ActivationsStore(sae.cfg, vit)
 
     if n_images > len(acts_store.dataset):
         logger.warning(
@@ -168,7 +165,7 @@ def get_feature_data(
     # compute the label tensor
     top_image_label_indices = torch.tensor([
         acts_store.dataset[int(index)]["label"]
-        for index in tqdm(top_indices.flatten(), desc="Getting labels")
+        for index in tqdm.tqdm(top_indices.flatten(), desc="Getting labels")
     ])
     # Reshape to original dimensions
     top_image_label_indices = top_image_label_indices.view(top_indices.shape)
@@ -183,7 +180,7 @@ def get_feature_data(
     # Should also save label information tensor here!!!
 
     n_neurons, n_examples = top_values.shape
-    for neuron in trange(n_neurons):
+    for neuron in tqdm.trange(n_neurons):
         neuron_dead = True
         neuron_dir = os.path.join(directory, str(neuron))
         for i in range(n_examples):
@@ -216,7 +213,7 @@ def main(
         n_images: number of images to use. Use a smaller number for debugging.
         k_top_images: the number of top images to store per neuron.
     """
-    vit, sae, _ = load_session(ckpt_path)
+    vit, sae, _ = saev.utils.load_session(ckpt_path)
     get_feature_data(
         sae, vit, n_images=n_images, k_top_images=k_top_images, directory=directory
     )
