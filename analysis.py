@@ -95,7 +95,6 @@ def get_feature_data(
     n_images: int = 32_768,
     k_top_images: int = 10,
     images_per_it: int = 16_384,
-    seed: int = 1,
     directory: str = "data",
 ):
     """
@@ -104,7 +103,6 @@ def get_feature_data(
         vit: The vision transformer to apply the SAE to.
         n_images: How many images to look at.
         k_top_images: How many images per neuron (SAE feature) to keep.
-        seed: Random seed.
         directory: Where to write this data.
     """
     torch.cuda.empty_cache()

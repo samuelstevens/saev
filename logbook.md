@@ -27,13 +27,33 @@ So I can take each piece through step by step and see where the mistake is.
 
 | Checkpoint | Wandb | Training Code |
 |---|---|---|
-| 2dlebd60 | [wawwh1rj](https://wandb.ai/samuelstevens/mats-hugo/runs/wawwh1rj) | original |
+| 2dlebd60 | [samuelstevens/mats-hugo/wawwh1rj](https://wandb.ai/samuelstevens/mats-hugo/runs/wawwh1rj) | original |
+| dd991rt3 | [samuelstevens/mats-hugo/g0sqbjux](https://wandb.ai/samuelstevens/mats-hugo/runs/g0sqbjux) | updated |
 
 
 | Checkpoint | Updated Training? | Updated Analysis? | Updated App Data? | Worked? |
 |---|---|---|--|---|
 | 2dlebd60 | No | No | No | Yes |
 | 2dlebd60 | No | No | Yes | No[^dataset-shuffle] |
-| 2dlebd60 | No | Yes | No |
-| 2dlebd60 | No | Yes | Yes | 
 
+[^dataset-shuffle]: This worked after I added the `.shuffle(seed=1)` line (commit 6319148) to the updated `generate_app_data.py` script. I think this is because in the original `vit_sae_analysis/dashboard_fns.py` there is a `shuffle(seed=seed)` and the default seed is 1.
+
+So per this footnote[^dataset-shuffle] I think the `dataset.shuffle()` call in both `analysis.py` and `generate_app_data.py` needs to be the same.
+I am going to update both the original code and the updated code to use `cfg.seed`.
+
+Same trial as before, but everywhere that we used `seed=1` is now `seed=cfg.seed`:
+
+| Checkpoint | Updated Training? | Updated Analysis? | Updated App Data? | Worked? |
+|---|---|---|--|---|
+| 2dlebd60 | No | No | No | Yes |
+| 2dlebd60 | No | No | Yes | Yes |
+
+**Good!**
+Now we can use the original analysis with the updated `generate_app_data.py` and it will work just fine.
+So we can at least assume that `generate_app_data.py` is correct.
+Now, let's figure out if there's something wrong with the `analysis.py` file.
+
+| Checkpoint | Updated Training? | Updated Analysis? | Updated App Data? | Worked? |
+|---|---|---|--|---|
+| 2dlebd60 | No | Yes | No | |
+| 2dlebd60 | No | Yes | Yes | |

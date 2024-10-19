@@ -13,6 +13,7 @@ dependencies = [
     "pillow>=11.0.0",
     "torch>=2.5.0",
     "tqdm>=4.66.5",
+    "transformer-lens>=1.2.2",
     "transformers>=4.45.2",
     "tyro>=0.8.12",
     "wandb>=0.18.5",

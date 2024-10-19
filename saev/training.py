@@ -93,7 +93,6 @@ def train_sae(
             n_fwd_passes_since_fired > sae.cfg.dead_feature_window
         ).bool()
         sae_in = activation_store.next_batch()
-        # breakpoint()
 
         # Forward and Backward Passes
         sae_out, feature_acts, loss, mse_loss, l1_loss, ghost_grad_loss = sae(
@@ -102,7 +101,6 @@ def train_sae(
         )
         did_fire = (feature_acts > 0).float().sum(-2) > 0
         n_fwd_passes_since_fired += 1
-        # breakpoint()
         n_fwd_passes_since_fired[did_fire] = 0  # TODO: is there a leak here?
 
         n_training_tokens += batch_size
@@ -163,7 +161,6 @@ def train_sae(
                 try:
                     with open(f"metrics/reference/step{n_steps}.json") as fd:
                         reference = json.load(fd)
-                        breakpoint()
                         print("Check that `reference` and `metrics` are similar.")
                         print("reference:", reference)
                         print("metrics:", metrics)

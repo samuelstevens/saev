@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.9.9"
+__generated_with = "0.9.10"
 app = marimo.App(width="full")
 
 
@@ -11,7 +11,6 @@ def __():
     import random
 
     import marimo as mo
-
     return mo, os, pickle, random
 
 
@@ -19,7 +18,7 @@ def __():
 def __():
     # webapp_dir = "webapp/jp7xtqeu"
     # webapp_dir = "webapp/p9jmneyb"
-    webapp_dir = "/local/scratch/stevens.994/sae-webapp/2dlebd60-original-analysis/updated-generate/webapp"
+    webapp_dir = "/local/scratch/stevens.994/sae-webapp/2dlebd60-original-analysis/original-generate/webapp"
     return (webapp_dir,)
 
 
@@ -63,7 +62,6 @@ def __(mo, pickle, webapp_dir):
 
     def format_metadata(metadata: dict[str, float | int]):
         return mo.table([metadata])
-
     return format_metadata, get_metadata
 
 
@@ -88,7 +86,7 @@ def __(get_neuron_i, metadatas, mo):
 @app.cell
 def __(get_neuron_i, mo, neuron_indices, webapp_dir):
     mo.image(
-        f"{webapp_dir}/neurons/{neuron_indices[get_neuron_i()]}/highest_activating_images.png"
+        f"{webapp_dir}/external/neurons/{neuron_indices[get_neuron_i()]}/highest_activating_images.png"
     )
     return
 

@@ -1,5 +1,6 @@
 import os
 import pickle
+import sys
 
 import beartype
 import datasets
@@ -7,6 +8,11 @@ import torch
 import tqdm
 import tyro
 from PIL import Image
+
+import saev
+
+# Fix pickle renaming errors.
+sys.modules["sae_training"] = saev
 
 
 @beartype.beartype
@@ -35,9 +41,9 @@ def main(ckpt_path: str, in_dir: str = "dashboard", out_dir: str = "web_app"):
     top_label_indices = safe_load(f"{in_dir}/max_activating_image_label_indices.pt")
 
     sae_mean_acts = top_values.mean(dim=-1)
-    dataset = datasets.load_dataset(
-        torch.load(ckpt_path, weights_only=False)["cfg"].dataset_path, split="train"
-    ).shuffle(seed=1)
+    cfg = torch.load(ckpt_path, weights_only=False)["cfg"]
+    dataset = datasets.load_dataset(cfg.dataset_path, split="train")
+    dataset = dataset.shuffle(seed=cfg.seed)
 
     n_neurons, _ = top_values.shape
     entropies = torch.zeros(n_neurons)
