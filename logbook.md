@@ -41,6 +41,8 @@ So I can take each piece through step by step and see where the mistake is.
 So per this footnote[^dataset-shuffle] I think the `dataset.shuffle()` call in both `analysis.py` and `generate_app_data.py` needs to be the same.
 I am going to update both the original code and the updated code to use `cfg.seed`.
 
+# 10/19/2024
+
 Same trial as before, but everywhere that we used `seed=1` is now `seed=cfg.seed`:
 
 | Checkpoint | Updated Training? | Updated Analysis? | Updated App Data? | Worked? |
@@ -55,5 +57,25 @@ Now, let's figure out if there's something wrong with the `analysis.py` file.
 
 | Checkpoint | Updated Training? | Updated Analysis? | Updated App Data? | Worked? |
 |---|---|---|--|---|
-| 2dlebd60 | No | Yes | No | |
-| 2dlebd60 | No | Yes | Yes | |
+| 2dlebd60 | No | Yes | No | No[^generate-bug] |
+| 2dlebd60 | No | Yes | Yes | No |
+
+[^generate-bug]: It threw an exception about some data not being available.
+
+So here's the thing.
+It's clearly my analysis that is wrong.
+Even after removing the `dataset.shuffle` call in the updated `generate_app_data.py` file, the grids have some weird images.
+Like it will be a mix of dogs and spiders in a single grid.
+Why does that happen?
+So I am going to do my best to eliminate as many differences as possible between the two scripts.
+
+# 10/21/2024
+
+I changed the activation store to behave *exactly* as the original code (shuffle before converting to an iterable dataset, commit 51f7947edcb19a7ca59dd3bd45d9869d090a91bf).
+Then the updated analysis and app data scripts work!
+
+| Checkpoint | Updated Training? | Updated Analysis? | Updated App Data? | Worked? |
+|---|---|---|--|---|
+| 2dlebd60 | No | Yes | Yes | **Yes** |
+
+Now that I trust the updated analysis code, I can evaluate whether *my* pre-trained models are as good as the others.
