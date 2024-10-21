@@ -1,6 +1,7 @@
 import collections.abc
 import logging
 import os
+import sys
 
 import beartype
 import torch
@@ -10,6 +11,9 @@ from jaxtyping import Float, Int, jaxtyped
 from torch import Tensor
 
 import saev
+
+# Fix pickle renaming errors.
+sys.modules["sae_training"] = saev
 
 logger = logging.getLogger("analysis")
 
