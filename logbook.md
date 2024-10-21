@@ -36,7 +36,7 @@ So I can take each piece through step by step and see where the mistake is.
 | 2dlebd60 | No | No | No | Yes |
 | 2dlebd60 | No | No | Yes | No[^dataset-shuffle] |
 
-[^dataset-shuffle]: This worked after I added the `.shuffle(seed=1)` line (commit 6319148) to the updated `generate_app_data.py` script. I think this is because in the original `vit_sae_analysis/dashboard_fns.py` there is a `shuffle(seed=seed)` and the default seed is 1.
+[^dataset-shuffle]: This worked after I added the `.shuffle(seed=1)` line (commit [6319148](https://github.com/samuelstevens/saev/commit/6319148f269013721baf9da15a08e5b1ca0b6e32)) to the updated `generate_app_data.py` script. I think this is because in the original `vit_sae_analysis/dashboard_fns.py` there is a `shuffle(seed=seed)` and the default seed is 1.
 
 So per this footnote[^dataset-shuffle] I think the `dataset.shuffle()` call in both `analysis.py` and `generate_app_data.py` needs to be the same.
 I am going to update both the original code and the updated code to use `cfg.seed`.
@@ -71,7 +71,7 @@ So I am going to do my best to eliminate as many differences as possible between
 
 # 10/21/2024
 
-I changed the activation store to behave *exactly* as the original code (shuffle before converting to an iterable dataset, commit 51f7947edcb19a7ca59dd3bd45d9869d090a91bf).
+I changed the activation store to behave *exactly* as the original code (shuffle before converting to an iterable dataset, commit [51f7947](https://github.com/samuelstevens/saev/commit/51f7947edcb19a7ca59dd3bd45d9869d090a91bf)).
 Then the updated analysis and app data scripts work!
 
 | Checkpoint | Updated Training? | Updated Analysis? | Updated App Data? | Worked? |
