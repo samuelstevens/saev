@@ -43,7 +43,7 @@ def main(ckpt_path: str, in_dir: str = "dashboard", out_dir: str = "web_app"):
     sae_mean_acts = top_values.mean(dim=-1)
     cfg = torch.load(ckpt_path, weights_only=False)["cfg"]
     dataset = datasets.load_dataset(cfg.dataset_path, split="train")
-    dataset = dataset.shuffle(seed=cfg.seed)
+    # dataset = dataset.shuffle(seed=cfg.seed)
 
     n_neurons, _ = top_values.shape
     entropies = torch.zeros(n_neurons)

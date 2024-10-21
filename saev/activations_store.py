@@ -36,9 +36,9 @@ def make_img_dataloader(
     default_cols = list(dataset.features.keys())
 
     dataset = (
-        dataset.to_iterable_dataset(num_shards=n_workers or 8)
-        .map(add_index, with_indices=True, batched=True)
+        dataset.map(add_index, with_indices=True, batched=True)
         .shuffle(seed=cfg.seed)
+        .to_iterable_dataset(num_shards=n_workers or 8)
         .map(map_fn, batched=True, batch_size=32, remove_columns=default_cols)
         .with_format("torch")
     )
