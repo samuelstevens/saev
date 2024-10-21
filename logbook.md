@@ -73,9 +73,21 @@ So I am going to do my best to eliminate as many differences as possible between
 
 I changed the activation store to behave *exactly* as the original code (shuffle before converting to an iterable dataset, commit [51f7947](https://github.com/samuelstevens/saev/commit/51f7947edcb19a7ca59dd3bd45d9869d090a91bf)).
 Then the updated analysis and app data scripts work!
+Now that I trust the updated analysis code, I can evaluate whether *my* pre-trained models are as good as the others.
 
 | Checkpoint | Updated Training? | Updated Analysis? | Updated App Data? | Worked? |
 |---|---|---|--|---|
 | 2dlebd60 | No | Yes | Yes | **Yes** |
+| dd991rt3 | Yes | Yes | Yes | **Yes** |
 
-Now that I trust the updated analysis code, I can evaluate whether *my* pre-trained models are as good as the others.
+...and now we see that my updated training code works as well!
+What a relief!
+
+With this in mind, there are several minor changes I want to make before I do some BioCLIP and TreeOfLife runs:
+
+* OpenCLIP instead of huggingface `transformers`
+* Removing `transformer-lens`
+* Removing HookedViT
+* Pre-computing ViT activations
+
+I'm going to do each of these independently using a set of runs as references.

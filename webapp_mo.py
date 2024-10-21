@@ -18,7 +18,7 @@ def __():
 def __():
     # webapp_dir = "webapp/jp7xtqeu"
     # webapp_dir = "webapp/p9jmneyb"
-    webapp_dir = "/local/scratch/stevens.994/sae-webapp/2dlebd60-original-analysis/original-generate/webapp"
+    webapp_dir = "/local/scratch/stevens.994/sae-webapp/dd991rt3-updated-analysis/updated-generate/webapp"
     return (webapp_dir,)
 
 
@@ -86,7 +86,7 @@ def __(get_neuron_i, metadatas, mo):
 @app.cell
 def __(get_neuron_i, mo, neuron_indices, webapp_dir):
     mo.image(
-        f"{webapp_dir}/external/neurons/{neuron_indices[get_neuron_i()]}/highest_activating_images.png"
+        f"{webapp_dir}/neurons/{neuron_indices[get_neuron_i()]}/highest_activating_images.png"
     )
     return
 
