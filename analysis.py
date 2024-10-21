@@ -54,7 +54,7 @@ def get_vit_acts(
         batches.append(batch)
         indices.append(i)
         n_seen += len(batch)
-        logger.info("Got batch of size %d.", len(batch))
+        logger.info("Got batch of size %d (%d total).", len(batch), n_seen)
 
     batches = torch.cat(batches, dim=0)
     indices = torch.cat(indices, dim=0)
@@ -111,8 +111,6 @@ def get_feature_data(
     """
     torch.cuda.empty_cache()
     sae.eval()
-
-    breakpoint()
 
     acts_store = saev.ActivationsStore(sae.cfg, vit)
 
@@ -180,25 +178,6 @@ def get_feature_data(
     torch.save(sae_sparsity, f"{directory}/sae_sparsity.pt")
     torch.save(sae_mean_acts, f"{directory}/sae_mean_acts.pt")
     # Should also save label information tensor here!!!
-
-    n_neurons, n_examples = top_values.shape
-    for neuron in tqdm.trange(n_neurons):
-        neuron_dead = True
-        neuron_dir = os.path.join(directory, str(neuron))
-        for i in range(n_examples):
-            if top_values[neuron, i].item() <= 0:
-                continue
-
-            if neuron_dead:
-                if not os.path.exists(neuron_dir):
-                    os.makedirs(neuron_dir)
-                neuron_dead = False
-
-            index = top_indices[neuron, i].item()
-            value = top_values[neuron, i].item()
-
-            image = acts_store.dataset[index]["image"]
-            image.save(f"{neuron_dir}/{i}_{index}_{value:.4g}.png", "PNG")
 
 
 def main(
